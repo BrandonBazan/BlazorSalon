@@ -1,0 +1,181 @@
+﻿@page "/"
+
+@using BlazorSalon.Shared;
+@using BlazorSalon.Client.Servicio;
+
+@inject IEmpleadoService empleadoServicio;
+@inject IServicioService servicioServicio;
+@inject IVentaService ventaServicio;
+
+
+<div class="content">
+
+    <div class="row">
+        <div class="col-4">
+            <InputText class="form-control" placeholder="Nombre Cliente" @bind-Value="venta.Cliente"></InputText>
+        </div>
+    </div>
+
+    <hr />
+    <div class="row">
+        <div class="col-2">
+
+            <select class="form-select" value="@idEmpleado" @onchange="EmpleadoSeleccionado">
+                <option value="0">-- Seleccionar --</option>
+                @foreach (var item in listEmpleado)
+                {
+                    <option value="@item.IdEmpleado"> @item.Nombre </option>
+                }
+            </select>
+        </div>
+        <div class="col-2">
+
+            <select class="form-select" value="@idServicio" @onchange="ServicioSeleccionado">
+                <option value="0">-- Seleccionar --</option>
+                @foreach (var item in listServicio)
+                {
+                    <option value="@item.IdServicio"> @item.Nombre </option>
+                }
+            </select>
+        </div>
+
+        <div class="col-2">
+            <InputNumber class="form-control" @bind-Value="precio"></InputNumber>
+        </div>
+
+        <div class="col-2">
+            <InputNumber class="form-control" @bind-Value="cantidad"></InputNumber>
+        </div>
+
+        <div class="col-2">
+            <button class="btn btn-primary" @onclick="AgregarServicio">Agregar</button>
+        </div>
+        <div class="col-2">
+            <button class="btn btn-success" @onclick="TerminarVenta">Terminar</button>
+        </div>
+
+
+    </div>
+    <hr />
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Empleado</th>
+                <th>Servicio</th>
+                <th>Precio</th>
+                <th>Cantidad</th>
+                <th>Sub Total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in venta.DetalleVenta)
+            {
+                <tr>
+                    <td>@item.Empleado.Nombre</td>
+                    <td>@item.Servicio.Nombre</td>
+                    <td>@item.Servicio.Precio</td>
+                    <td>@item.Cantidad</td>
+                    <td>@item.SubTotal</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger"
+                        @onclick="@(() => EliminarServicio(item.Servicio.IdServicio, item.Empleado.IdEmpleado))">
+                            <span class="oi oi-trash"></span>
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+</div>
+
+
+@code {
+    List<EmpleadoDTO> listEmpleado = new List<EmpleadoDTO>();
+    List<ServicioDTO> listServicio = new List<ServicioDTO>();
+
+    VentaDTO venta = new VentaDTO() { DetalleVenta = new List<DetalleVentaDTO>() };
+    int idEmpleado = 0;
+    int idServicio = 0;
+    int cantidad = 0;
+    decimal? precio = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        listEmpleado = await empleadoServicio.Lista();
+        listServicio = await servicioServicio.Lista();
+
+    }
+
+    public void ServicioSeleccionado(ChangeEventArgs e)
+    {
+        int _idServicio = Convert.ToInt32(e.Value.ToString());
+
+        if (_idServicio != 0)
+            precio = listServicio.Find(p => p.IdServicio == _idServicio)!.Precio;
+        else
+            precio = 0;
+
+        idServicio = _idServicio;
+        cantidad = 0;
+    }
+
+    public void EmpleadoSeleccionado(ChangeEventArgs e)
+    {
+        int _idEmpleado = Convert.ToInt32(e.Value.ToString());
+
+        idEmpleado = _idEmpleado;
+
+    }
+
+    private void AgregarServicio()
+    {
+            venta.DetalleVenta.Add(new DetalleVentaDTO
+                {
+                    Servicio = new ServicioDTO
+                    {
+                        IdServicio = idServicio,
+                        Nombre = listServicio.Find(p => p.IdServicio == idServicio)!.Nombre,
+                        Precio = listServicio.Find(p => p.IdServicio == idServicio)!.Precio,
+                    },
+                    Cantidad = cantidad,
+                    SubTotal = precio * cantidad,
+
+                    Empleado = new EmpleadoDTO
+                    {
+                        IdEmpleado = idEmpleado,
+                        Nombre = listEmpleado.Find(p => p.IdEmpleado == idEmpleado)!.Nombre,
+                    }
+                });
+
+        idEmpleado = 0;
+        idServicio = 0;
+        precio = 0;
+        cantidad = 0;
+    }
+
+
+    public void EliminarServicio(int id, int idE)
+    {
+        var servicio = venta.DetalleVenta.First(p => p.Servicio.IdServicio == id);
+        var empleado = venta.DetalleVenta.First(p => p.Empleado.IdEmpleado == idE);
+
+        venta.DetalleVenta.Remove(servicio);
+        venta.DetalleVenta.Remove(empleado);
+    }
+
+    public async Task TerminarVenta()
+    {
+        venta.Total = venta.DetalleVenta.Sum(p => p.SubTotal);
+        var result = await ventaServicio.Guardar(venta);
+
+        if (result)
+        {
+            venta.Cliente = "";
+            venta.DetalleVenta = new List<DetalleVentaDTO>();
+        }
+    }
+}
+
